@@ -439,8 +439,6 @@ namespace pq_ns {
             return size;
         }
 
-        // // traverse through each structure (worker, leader, coordinator) ensuring that in each case, the elements are ordered as expected
-        // // TODO: issue here calling delete_min_worker() on the heap when the thread performs more operations than the heapList size
         void validate_insertion_ordering() {
             COUTATOMIC("\n\nVALIDATING insertion ordering...\n");
             validate_run = true;
@@ -551,7 +549,7 @@ namespace pq_ns {
                 COUTATOMIC("repeat keys value: " << tot_repeats << endl);
             }
 
-            sum += tot_repeats; //to match thread keysum - //todo:for accurate, make method which main can access to adjust threadkeysum
+            sum += tot_repeats; //to match thread keysum -
             COUTATOMIC(endl << "TOTAL sum is: " << sum << endl << endl);
             return sum;
         }

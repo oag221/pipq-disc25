@@ -311,7 +311,7 @@ template <class V>
 void pq_ns::pq<V>::HeapInit(PQ_Heap** heap, int group, int heap_size) {
     (*heap) = (PQ_Heap*)numa_alloc_onnode(sizeof(PQ_Heap), group);
     (*heap)->pq_ptr = (HeapList*)numa_alloc_onnode(sizeof(HeapList), group);
-    (*heap)->pq_ptr->heapList = (PQ_Node*)numa_alloc_onnode(heap_size * sizeof(PQ_Node), group); // TODO: should align size be here???
+    (*heap)->pq_ptr->heapList = (PQ_Node*)numa_alloc_onnode(heap_size * sizeof(PQ_Node), group);
     (*heap)->pq_ptr->next = nullptr;
     (*heap)->pq_ptr->prev = nullptr;
     (*heap)->lock   = (long*)numa_alloc_onnode(sizeof(long), group);
@@ -719,9 +719,6 @@ int pq_ns::pq<V>::hier_delete() { // for microbenchmarks
     return announce_coord[t_idx].key >= 0 ? announce_coord[t_idx].key : 0;
 }
 
-//! ccsync for competing for coordinator - look into the paper
-// more recently: may be implemented faster
-
 template <class V>
 void pq_ns::pq<V>::try_compete_coordinator()  {
     while(true) {
@@ -734,13 +731,12 @@ void pq_ns::pq<V>::try_compete_coordinator()  {
                     return;
                 }
                 try_become_coordinator();
-                //Coordinate();
                 *t_compete_coord_lock = *t_compete_coord_lock + 1;
                 return;
             }
         } else {
             while (*t_compete_coord_lock == lock_value) {
-                help_upsert(); //! DESG ONLY
+                help_upsert();
                 if (!announce_coord[t_idx].status) {
                     return;
                 }
@@ -766,7 +762,7 @@ void pq_ns::pq<V>::try_become_coordinator() {
             }
         } else {
             while (*coord_lock == lock_value) {
-                help_upsert(); //! DESG ONLY
+                help_upsert();
             }
         }
     }
@@ -871,16 +867,11 @@ void pq_ns::pq<V>::help_upsert() {
         int lock_value = *(t_local_heap->lock);
         if (lock_value % 2 == 0) {
             if (__sync_bool_compare_and_swap(t_local_heap->lock, lock_value, lock_value + 1)) {
-                // int max_upsert = 3, cnt_upsert = 0; // max to pull up - //! try with 3 too?
-                // int max_tries = 5, cnt_tries = 0;
-                // while (cnt_upsert < max_upsert && cnt_tries < max_tries && t_lead_counters->count < COUNTER_THRESHOLD) {
                 while (1) {
-                    //cnt_tries++;
                     int key_worker;
                     std::optional<V> ret = delete_min_worker(t_local_heap, &key_worker);
                     if (key_worker != EMPTY) {
                         if (harris_insert(leader_set, t_largest_in_leader, t_idx, t_group, key_worker, ret.value())) { // if fail, key and value are already present, so remove another from worker and try to insert
-                            //cnt_upsert++;
                             __sync_add_and_fetch(&(t_lead_counters->count), 1);
                             break;
                         } else {
@@ -897,7 +888,6 @@ void pq_ns::pq<V>::help_upsert() {
     }
 }
 
-// futureTODO : add in a check for if there's an empty list we should deallocate (?)
 template <class V>
 std::optional<V> pq_ns::pq<V>::delete_min_worker(PQ_Heap *Heap, int* key) {
     if ((Heap->size) == 0) {
